@@ -357,9 +357,9 @@
         const keysPressed = new Set();
         
         // List of commands that require the keydown/keyup sequence (i.e., continuous press)
-        const continuousCommands = ['Up', 'Down', 'Left', 'Right', 'Rev', 'Fwd', 'VolumeUp', 'VolumeDown'];
+        const continuousCommands = ['Up', 'Down', 'Left', 'Right'];
         // List of all keys we care about, to prevent default browser behavior
-        const allTrackedKeys = ['Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' ', 'Backspace', 'h', 'H', 'p', 'P', 'r', 'R', 'f', 'F', 'm', 'M', '+', '-', 'PageUp', 'PageDown', 'k', 'K'];
+        const allTrackedKeys = ['Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' ', 'Backspace'];
 
 
         let lastIp = localStorage.getItem('rokuIP') || defaultIpPlaceholder;
@@ -744,7 +744,7 @@
             }
 
             let command = null;
-            
+
             switch (rawKey) {
                 case 'Escape': command = 'Back'; break;
                 case 'ArrowUp': command = 'Up'; break;
@@ -754,15 +754,7 @@
                 case 'Enter': command = 'Select'; break;
                 case ' ': command = 'Play'; break;
                 case 'Backspace': command = 'Back'; break;
-                case 'h': case 'H': command = 'Home'; break;
-                case 'p': case 'P': command = 'Power'; break;
-                case 'r': case 'R': command = 'Rev'; break;
-                case 'f': case 'F': command = 'Fwd'; break;
-                case 'm': case 'M': command = 'VolumeMute'; break;
-                case '+': case 'PageUp': command = 'VolumeUp'; break;
-                case '-': case 'PageDown': command = 'VolumeDown'; break;
-                case 'k': case 'K': openHelpModal(); return; 
-                default: 
+                default:
                     return;
             }
 
@@ -784,14 +776,14 @@
          * Clears the key state and sends the keyup command for continuous actions.
          */
         function handleKeyUp(event) {
-            
+
             // Do not process keyup if focus is on an input field (to allow native keyup)
             if (event.target.tagName === 'INPUT') {
                 return;
             }
-            
+
             const rawKey = event.key;
-            
+
             if (!keysPressed.has(rawKey)) return;
 
             let command = null;
@@ -800,10 +792,6 @@
                 case 'ArrowDown': command = 'Down'; break;
                 case 'ArrowLeft': command = 'Left'; break;
                 case 'ArrowRight': command = 'Right'; break;
-                case 'r': case 'R': command = 'Rev'; break;
-                case 'f': case 'F': command = 'Fwd'; break;
-                case '+': case 'PageUp': command = 'VolumeUp'; break;
-                case '-': case 'PageDown': command = 'VolumeDown'; break;
             }
 
             const isContinuous = command && continuousCommands.includes(command);
@@ -811,7 +799,7 @@
             if (isContinuous) {
                 handleContinuousCommand(command, 'up');
             }
-            
+
             keysPressed.delete(rawKey);
         }
 
