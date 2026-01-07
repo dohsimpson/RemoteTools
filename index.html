@@ -81,7 +81,7 @@
                 Enter IP to begin.
             </div >
             <div id="cors-warning" class="text-center text-xs text-green-500 mt-2 p-2 bg-gray-900 rounded-lg hidden">
-                ✅ CORS bypassed via no-cors mode - remote ready to use
+                ✅ Using server-side proxy - no mixed content issues
             </div>
         </div>
         
@@ -436,9 +436,9 @@
 
             // Determine the correct ECP endpoint: keypress, keydown, or keyup
             // 'Lit_' commands (text input) must always use 'keypress'
-            const endpoint = key.startsWith('Lit_') || type === 'press' ? 'keypress' : `${type}key`; 
-            const url = `http://${ip}:${defaultRokuPort}/${endpoint}/${key}`;
-            
+            const endpoint = key.startsWith('Lit_') || type === 'press' ? 'keypress' : `${type}key`;
+            const path = `/${endpoint}/${key}`;
+
             // Only update status for single presses or the start/end of continuous ones
             if (type === 'press' && !key.startsWith('Lit_')) {
                  updateStatus(`Sending command: ${key}...`, 'text-purple-400');
@@ -450,28 +450,33 @@
             }
 
             try {
-                // Using no-cors mode to bypass browser CORS restrictions
-                // The request is sent to Roku, but response is opaque (unreadable)
-                const response = await fetch(url, {
+                // Use server-side proxy to avoid mixed content issues
+                // Request goes to same-origin HTTPS, server forwards to HTTP Roku
+                const response = await fetch(`/proxy?ip=${encodeURIComponent(ip)}&port=${defaultRokuPort}&path=${encodeURIComponent(path)}`, {
                     method: 'POST',
-                    mode: 'no-cors',
                     headers: {
-                        'Content-Length': 0 // Required for ECP
+                        'Content-Length': '0'
                     }
                 });
 
-                // With no-cors, we can't read the response, but the request was sent
-                if (type === 'press' && !key.startsWith('Lit_')) {
-                     updateStatus(`Command '${key}' sent.`, 'text-green-400');
-                     setTimeout(() => updateStatus(`Ready to connect to ${ip}`), 2000);
+                if (response.ok) {
+                    if (type === 'press' && !key.startsWith('Lit_')) {
+                         updateStatus(`Command '${key}' sent successfully.`, 'text-green-400');
+                         setTimeout(() => updateStatus(`Ready to connect to ${ip}`), 2000);
+                    }
+                    return true;
+                } else {
+                    if (type !== 'up' && type !== 'down' && !key.startsWith('Lit_')) {
+                        showError(`Server error: HTTP ${response.status}. Check proxy is configured.`);
+                    }
+                    return false;
                 }
-                return true; // Assume success (request was sent)
             } catch (error) {
                 if (type !== 'up' && type !== 'down' && !key.startsWith('Lit_')) {
                     console.error("Fetch failed (Network Issue):", error);
                     showError(`CONNECTION FAILED: Check that Roku IP is correct and Roku is on.`);
                 }
-                return false; // Network Error
+                return false;
             }
         }
 
@@ -611,23 +616,28 @@
         }
 
         async function testSingleIP(ip) {
-            const url = `http://${ip}:${defaultRokuPort}/query/device-info`;
+            const path = '/query/device-info';
 
             if (!discoveryModal.classList.contains('hidden')) {
                 updateDiscoveryStatus(`Checking: ${ip}...`, 'text-yellow-500');
             }
 
             try {
-                // Try with no-cors first - if we get any response, the device exists
-                // Note: with no-cors we can't read the device name, but we can detect presence
-                const response = await fetch(url, {
-                    mode: 'no-cors',
+                // Use server-side proxy to avoid mixed content issues
+                const response = await fetch(`/proxy?ip=${encodeURIComponent(ip)}&port=${defaultRokuPort}&path=${encodeURIComponent(path)}`, {
                     signal: AbortSignal.timeout(4000)
                 });
 
-                // With no-cors, any successful response means a device is there
-                // We just can't read its name, so return a generic one
-                return { ip, name: 'Roku Device (name unavailable)' };
+                if (response.ok) {
+                    const text = await response.text();
+                    if (text.includes('<device-info>')) {
+                        const parser = new DOMParser();
+                        const xmlDoc = parser.parseFromString(text, "text/xml");
+                        const nameElement = xmlDoc.getElementsByTagName('friendly-device-name')[0];
+                        const name = nameElement ? nameElement.textContent : 'Roku Device';
+                        return { ip, name };
+                    }
+                }
             } catch (error) {
                 // Ignore network/timeout errors
             }
@@ -641,16 +651,23 @@
             updateStatus(`Attempting connection to ${ip}...`, 'text-purple-400');
 
             try {
-                const url = `http://${ip}:${defaultRokuPort}/query/device-info`;
+                const path = '/query/device-info';
 
-                // Using no-cors mode - we can't read the response, but if no error is thrown, device exists
-                const response = await fetch(url, {
-                    mode: 'no-cors',
+                // Use server-side proxy to avoid mixed content issues
+                const response = await fetch(`/proxy?ip=${encodeURIComponent(ip)}&port=${defaultRokuPort}&path=${encodeURIComponent(path)}`, {
                     signal: AbortSignal.timeout(5000)
                 });
 
-                // With no-cors, reaching here means the device responded
-                updateStatus(`Connection SUCCESSFUL! Roku device at ${ip} is responding.`, 'text-green-500');
+                if (response.ok) {
+                    const text = await response.text();
+                    if (text.includes('<device-info>')) {
+                        updateStatus(`Connection SUCCESSFUL! Roku device at ${ip} is responding.`, 'text-green-500');
+                    } else {
+                        updateStatus(`Connection successful, but received unexpected data.`, 'text-yellow-500');
+                    }
+                } else {
+                    showError(`Connection failed: HTTP ${response.status}. Check if Roku is online and IP is correct.`);
+                }
 
             } catch (error) {
                 console.error("Connection test failed (Network Issue):", error);
